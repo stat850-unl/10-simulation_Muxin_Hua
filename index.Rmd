@@ -1,6 +1,6 @@
 ---
 title: "Homework: Simulation"
-author: "Firstname Lastname"
+author: "Muxin Hua"
 output: html_document
 ---
 
@@ -40,9 +40,47 @@ First, you must set up a data frame describing all possible values of your playi
 
     Pseudocode steps
 
+    1. Create a tibble with 4 suits and 13 values labeled Ace, 2:10, J, Q, K
+    2. Add card ID numbers
+    3. Limited number of players to 2
+    4. Add location column
+    5. Add rank for comparison
 ```{r}
-# R code goes here - you can add more R chunks if you have multiple steps or want to explain each function after it's written.
+library(tidyverse)
+create_deck <- function() {
+  # Set up cards
+  suits <- c("hearts", "diamonds", "spades", "clubs")
+  
+  values <- factor(1:13, labels = c(2:10, "Jack", "Queen", "King", "Ace"))
+  deck <- crossing(suit = suits, value = values)
 
+  # Set up points
+  # This will change depending on which game you want to simulate
+  # I have demonstrated this using hearts 
+  deck %>%
+    # add a card ID
+    mutate(id = 1:n()) %>%
+    # add rank for comparing
+    mutate(rank = rep(c(2:13,1), times=4))
+}
+
+create_deck()
+
+```
+### Limit the number of players to 2
+```{r}
+check_player <- function(deck=create_deck(), n_player = 2){
+  if (n_player == 2) {
+      # do nothing special
+    } else{
+      stop("War is playable by only 2")
+    }
+  deck
+}
+
+create_deck() %>%
+  check_player(n_player = 2) %>%
+  arrange(value, suit)
 ```
 
 ### Write one or more functions to simulate the basic game mechanisms
@@ -50,28 +88,142 @@ First, you must set up a data frame describing all possible values of your playi
 For instance, if you are simulating a game where all cards are initially held by players, you need to have a function that randomly assigns 13 cards to each player. You may also want a function that controls the game play and functions for each separate step in game play (some of these functions may need to be called using a loop).
 
     Pseudocode steps
+    1. Shuffle the card and devide the deck evenly, each player has 26 cards.
+    2. As long as cards are not labeled with the same player,the following loop goes on.
+      2.1 Each of the player randomly pick a card from their stacks.
+      2.2 compare the card.
+        2.2.1 If the card are not the same rank, return the player has the higher rank.
+        2.2.2 If the cards are the same rank, each player pick another two cards, turn up one randomly, and compare. If the rank are not the same, goes to the next step; if the rank are the same, redo this step.
+      2.3 Winner takes all the cards selected by both players.
+      2.4 Check if all the cards belong to one player, if not return to 2.1.
 
 #### Break your problem down into steps and write functions for each step, putting each step under its own level 4 header (\#\#\#\# at the front)
 
+    
+#### Shuffle and divide
 ```{r}
-# R code goes here - you can add more R chunks if you have multiple steps or want to explain each function after it's written.
+# Shuffle the card and evenly divide 52 cards to 2 players, 26 cards each.
+shuffle_div <- function(deck, player=1:2){
+  deck %>% check_player(length(player)) %>%
+    # shuffle the deck
+    slice_sample(n = nrow(deck)) %>%
+    # devide cards
+    mutate(player = rep(player, length.out=n()))
+}
+create_deck() %>% shuffle_div()
+```
 
+#### Picking Cards
+Since the players don't need to know how their cards are arranged, so I set rule of randomly picking cards.
+```{r}
+# picking the number of cards need to be picked
+# number of cards need to be picked depends on if the round before was a tie.
+random_pick <- function(n_round){
+  # create a vector storing the cards picked by players
+  selected <- c()
+  # pick cards for each player
+  for (i in 1:2){
+    picked <- create_deck() %>% 
+    shuffle_div() %>% 
+    filter(player == i) %>%  # limit the picking to a specific player
+    slice_sample(n = (ifelse(n_round==1, 1, 2))) # pick 1 or 2 cards depend on if there were same rank in the round before
+    selected <- rbind(selected, picked)
+  }
+  return(selected)
+}
+```
+
+#### Compare the cards
+```{r}
+# No matter how many selected (1 or 2), randomly pick one for comparing
+compare <- function(selected, tie=0){
+  winner=0
+  # select the card for comparing
+  select_1 <- selected %>% filter(player==1) %>% slice_sample(n = 1)
+  select_2 <- selected %>% filter(player==2) %>% slice_sample(n = 1)
+  # compare the selected cards to decide winner and tie
+  if(select_1$rank>select_2$rank){
+    winner=1
+    tie=0}
+  else if(select_1$rank>select_2$rank){
+      winner=2
+      tie=0}
+  else{tie <- tie+1} # if this is a tie, add one to variable tie
+  return(c(winner, tie))
+  }
+```
+#### Winner takes all the cards
+```{r}
+take_cards <- function(deck, all_selected, winner){
+  # assigning all the cards in selected as cards of the winner
+  all_selected$player <- rep(winner,times=nrow(all_selected)) 
+  # relable those cards in the original deck
+  deck <- rbind(deck[-c(all_selected$id),], all_selected)
+  return(deck)
+}
+```
+#### Play a full game
+```{r}
+general_play <- function(total_round){
+  # create a deck, shuffle and divide
+  stacks <- create_deck() %>% shuffle_div()
+  n_count = 1 # Total number of comparisons
+  # As long as both player have cards, the game can go on
+  while (!((sum(stacks$player == 1)==0) || (sum(stacks$player == 2)==0))){
+    n_tie <- 0 
+    tie <- 0
+    n_round <- 1 # how many comparisons before a player takes all the cards
+    all_selected <- random_pick(n_round)
+    res <- compare(all_selected, tie)
+    winner <- res[1]
+    tie <- res[2]
+    # If there's a tie in the first comparison, the selection and comparing loop has to go on before find a real winner
+    while(tie != 0){
+      n_tie <- n_tie + 1
+      n_round <- n_round + tie
+      round_selected <- random_pick(n_round)
+      all_selected <- rbind(round_selected, all_selected)
+      res <- compare(round_selected, tie)
+      winner <- res[1]
+      tie <- res[2]
+    }
+    n_count <- n_count+n_round
+    take_cards(stacks, all_selected, winner)
+    if (n_count>=total_round){break} # It takes thousands of round to finish playing this game, so I limited the game to the a number assigned by user 
+  }
+  return(c(n_tie, n_count)) # Return how many ties are their in the whole game 
+}
 ```
 
 #### Full Simulation
-
-Your last function should be something that when called returns information about a fully played game.
+I run 1000 times for each round limitation of 10, 100 and 500, to see what are the percentage of tie in the game.
 
 ```{r}
+total_percentage <- c()
+for (total_round in c(10, 100, 500)){
+  tie_percentage <- c()
+  i=1
+  while (i <= 1000){
+    rest <- general_play(total_round)
+    tie_percentage <- rbind(tie_percentage, rest)
+    i <- i+1
+    }
+  total_percentage <- rbind(total_percentage, tie_percentage)
+}
 
+```
+
+```{r}
+save(total_percentage, file = "total_percentage.Rdata")
 ```
 
 ### Identify a probability question you can answer with your simulation
 
-For instance, if you are simulating blackjack, you may want to know what the [expected return on a specific strategy is](https://towardsdatascience.com/python-blackjack-simulator-61b591ffb971) (hint: if you're beating the dealer, your simulation is probably wrong).
+What are the percentage of same-rank happened in a war game.
 
 ### Design a simulation to answer the question you identified
 
-Run your simulation with an increasing number of iterations and create some sort of plot showing your results.
+```{r}
 
-Describe any issues you encountered in your simulation, and how you addressed them (or where the whole thing went off the rails, if you couldn't address everything in time).
+```
+
