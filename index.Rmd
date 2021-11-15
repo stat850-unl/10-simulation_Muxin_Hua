@@ -219,11 +219,14 @@ save(total_percentage, file = "total_percentage.Rdata")
 
 ### Identify a probability question you can answer with your simulation
 
-What are the percentage of same-rank happened in a war game.
-
-### Design a simulation to answer the question you identified
-
+#### Does the total number of same-rank case varies with the total number of games played?  
+To answer this question, I plot the statistical distribution of the number of 'same-rank case' as follow. The simulation shows that the number of 'same-rank case' looks independent of the game played. 
 ```{r}
+load("total_percentage.Rdata")
+total_percentage <- cbind(data.frame(total_percentage), rep(c('10', '100', '500'), each=1000))
+colnames(total_percentage) <- c('rep_times', 'all_rounds', 'mark')
+rownames(total_percentage) <- c(1:nrow(total_percentage))
 
+ggplot(total_percentage, aes(x=rep_times))+geom_bar()+facet_grid(mark ~ .)
 ```
 
