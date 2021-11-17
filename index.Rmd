@@ -198,7 +198,7 @@ general_play <- function(total_round){
 #### Full Simulation
 I run 1000 times for each round limitation of 10, 100 and 500, to see what are the percentage of tie in the game.
 
-```{r}
+```{r, eval = F}
 total_percentage <- c()
 for (total_round in c(10, 100, 500)){
   tie_percentage <- c()
@@ -213,7 +213,7 @@ for (total_round in c(10, 100, 500)){
 
 ```
 
-```{r}
+```{r, eval = F}
 save(total_percentage, file = "total_percentage.Rdata")
 ```
 
